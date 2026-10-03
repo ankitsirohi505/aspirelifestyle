@@ -10,8 +10,8 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@200;300;400;500;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
   <link rel="preconnect" href="https://orgfarm-e88355df2d-dev-ed.develop.my.site.com" crossorigin>
-  <link rel="preconnect" href="https://orgfarm-e88355df2d-dev-ed.develop.my.salesforce-scrt.com" crossorigin>
   <link rel="stylesheet" href="assets/styles.css">
+  <link rel="stylesheet" href="assets/concierge.css">
 </head>
 <body>
 
@@ -185,121 +185,7 @@
       toTop.classList.toggle('show', window.scrollY > 600);
     }, { passive: true });
   </script>
-  <!-- Aspire Concierge: Salesforce Embedded Messaging (Enhanced Chat v2) with the Aspire Travel Concierge Agentforce service agent.
-       The Salesforce script is loaded only after the page has finished loading, and a placeholder launcher
-       shows the chat state until Salesforce's own chat button is ready. -->
-  <button class="concierge-launcher" id="conciergeLauncher" type="button" aria-live="polite">
-    <span class="concierge-dot"></span><span class="concierge-label">Connecting to Concierge…</span>
-  </button>
-  <script type='text/javascript'>
-    (function () {
-      var ESW_ORG = '00Daj000016HMHu';
-      var ESW_DEPLOYMENT = 'Aspire_Concierge_Chat';
-      var ESW_SITE = 'https://orgfarm-e88355df2d-dev-ed.develop.my.site.com/ESWAspireConciergeChat1791041414849';
-      var ESW_SCRT = 'https://orgfarm-e88355df2d-dev-ed.develop.my.salesforce-scrt.com';
-      var READY_TIMEOUT_MS = 45000;
-
-      var launcher = document.getElementById('conciergeLauncher');
-      var label = launcher.querySelector('.concierge-label');
-      var ready = false, wantsOpen = false, failed = false;
-
-      function setState(state, text) {
-        launcher.dataset.state = state;
-        label.textContent = text;
-      }
-
-      function openChat() {
-        try {
-          embeddedservice_bootstrap.utilAPI.launchChat();
-        } catch (e) {
-          console.error('Could not open Concierge chat: ', e);
-        }
-      }
-
-      launcher.addEventListener('click', function () {
-        if (failed) { window.location.reload(); return; }
-        if (ready) { openChat(); return; }
-        wantsOpen = true;
-        setState('connecting', 'Opening chat as soon as it is ready…');
-      });
-
-      window.addEventListener('onEmbeddedMessagingButtonCreated', function () {
-        ready = true;
-        launcher.dataset.state = 'ready';
-        launcher.hidden = true;
-        if (wantsOpen) openChat();
-      });
-
-      function fail(reason) {
-        if (ready) return;
-        failed = true;
-        console.error('Aspire Concierge chat did not load: ' + reason);
-        setState('failed', 'Chat could not load. Tap to retry');
-      }
-
-      var initialised = false;
-
-      function initEmbeddedMessaging() {
-        if (initialised) return;
-        initialised = true;
-        try {
-          embeddedservice_bootstrap.settings.language = 'en_US';
-          embeddedservice_bootstrap.init(ESW_ORG, ESW_DEPLOYMENT, ESW_SITE, { scrt2URL: ESW_SCRT });
-        } catch (err) {
-          fail(err && err.message ? err.message : String(err));
-        }
-      }
-
-      // The Salesforce site serving the chat script occasionally stalls a request indefinitely.
-      // Rather than wait on it, request the script again on a fresh URL after SCRIPT_TIMEOUT_MS.
-      var SCRIPT_TIMEOUT_MS = 8000;
-      var MAX_ATTEMPTS = 4;
-
-      function loadScript(attempt) {
-        var settled = false;
-        var script = document.createElement('script');
-        script.async = true;
-        script.src = attempt === 0
-          ? ESW_SITE + '/assets/js/bootstrap.min.js'
-          : ESW_SITE + '/assets/js/init.min.js?retry=' + attempt + '&t=' + Date.now();
-        var timer = setTimeout(function () {
-          if (settled || initialised) return;
-          settled = true;
-          console.warn('Concierge chat script stalled (attempt ' + (attempt + 1) + '), retrying');
-          retry(attempt);
-        }, SCRIPT_TIMEOUT_MS);
-        script.onload = function () {
-          clearTimeout(timer);
-          if (window.embeddedservice_bootstrap) initEmbeddedMessaging();
-        };
-        script.onerror = function () {
-          clearTimeout(timer);
-          if (settled || initialised) return;
-          settled = true;
-          retry(attempt);
-        };
-        document.body.appendChild(script);
-      }
-
-      function retry(attempt) {
-        if (attempt + 1 < MAX_ATTEMPTS) {
-          loadScript(attempt + 1);
-        } else {
-          fail('chat script did not load after ' + MAX_ATTEMPTS + ' attempts');
-        }
-      }
-
-      function loadChat() {
-        loadScript(0);
-        setTimeout(function () { fail('timed out after ' + READY_TIMEOUT_MS / 1000 + 's'); }, READY_TIMEOUT_MS);
-      }
-
-      if (document.readyState === 'complete') {
-        loadChat();
-      } else {
-        window.addEventListener('load', loadChat);
-      }
-    })();
-  </script>
+  <!-- Aspire Concierge: custom chat widget backed by the Aspire Travel Concierge Agentforce agent -->
+  <script src="assets/concierge.js" defer></script>
 </body>
 </html>
