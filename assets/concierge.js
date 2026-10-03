@@ -11,7 +11,7 @@
     launcherText: 'Ask Me Anything',
     welcome: 'Welcome to Aspire Concierge. I can plan and book trips tailored to you. To get started, what is your email address?',
     requestTimeoutMs: 20000,
-    warmupTimeoutMs: 6000,
+    warmupTimeoutMs: 12000,
     storageKey: 'aspireConciergeChat.v1'
   };
 
