@@ -10,7 +10,7 @@
     agentName: 'Aspire Travel Concierge',
     launcherText: 'Ask Me Anything',
     welcome: 'Welcome to Aspire Concierge. I can plan and book trips tailored to you. To get started, what is your email address?',
-    requestTimeoutMs: 90000,
+    requestTimeoutMs: 35000,
     storageKey: 'aspireConciergeChat.v1'
   };
 
@@ -173,19 +173,33 @@
       customerSessionId: state.customerSessionId,
       capturedEmail: state.capturedEmail
     };
-    var controller = window.AbortController ? new AbortController() : null;
-    var timer = setTimeout(function () { if (controller) controller.abort(); }, CONFIG.requestTimeoutMs);
 
-    fetch(CONFIG.endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: controller ? controller.signal : undefined
-    })
-      .then(function (r) {
+    // A request to the Salesforce site occasionally stalls without any response; give up on it
+    // after requestTimeoutMs and send it once more on a fresh request.
+    function attempt(retriesLeft) {
+      var controller = window.AbortController ? new AbortController() : null;
+      var timer = setTimeout(function () { if (controller) controller.abort(); }, CONFIG.requestTimeoutMs);
+      return fetch(CONFIG.endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        cache: 'no-store',
+        signal: controller ? controller.signal : undefined
+      }).then(function (r) {
+        clearTimeout(timer);
         if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();
-      })
+      }, function (err) {
+        clearTimeout(timer);
+        if (err && err.name === 'AbortError' && retriesLeft > 0) {
+          console.warn('Concierge request stalled, retrying');
+          return attempt(retriesLeft - 1);
+        }
+        throw err;
+      });
+    }
+
+    attempt(1)
       .then(function (res) {
         if (res.agentSessionId) state.agentSessionId = res.agentSessionId;
         if (res.customerSessionId) state.customerSessionId = res.customerSessionId;
@@ -203,7 +217,6 @@
         state.items.push({ kind: 'error', text: 'I could not reach the concierge just now. Please check your connection and try again.', ts: Date.now() });
       })
       .then(function () {
-        clearTimeout(timer);
         busy = false;
         save();
         render();
