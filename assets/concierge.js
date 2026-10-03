@@ -10,7 +10,9 @@
     agentName: 'Aspire Travel Concierge',
     launcherText: 'Ask Me Anything',
     welcome: 'Welcome to Aspire Concierge. I can plan and book trips tailored to you. To get started, what is your email address?',
-    requestTimeoutMs: 20000,
+    requestTimeoutMs: 15000,
+    requestRetries: 2,
+    slowNoticeMs: 8000,
     warmupTimeoutMs: 12000
   };
 
@@ -36,6 +38,8 @@
   // The conversation lives only in this page: every reload starts closed with a fresh chat.
   var state = freshState();
   var busy = false;
+  var slow = false;
+  var slowTimer = null;
   var els = {};
 
   function freshState() {
@@ -184,6 +188,9 @@
   function send(text) {
     push({ kind: 'user', text: text, ts: Date.now() });
     busy = true;
+    slow = false;
+    clearTimeout(slowTimer);
+    slowTimer = setTimeout(function () { if (busy) { slow = true; render(); } }, CONFIG.slowNoticeMs);
     render();
 
     var payload = {
@@ -218,7 +225,7 @@
       });
     }
 
-    attempt(1)
+    attempt(CONFIG.requestRetries)
       .then(function (res) {
         if (res.agentSessionId) state.agentSessionId = res.agentSessionId;
         if (res.customerSessionId) state.customerSessionId = res.customerSessionId;
@@ -238,6 +245,8 @@
         state.items.push({ kind: 'error', texts: ['I could not reach the concierge just now. Please check your connection and try again.'], ts: Date.now() });
       })
       .then(function () {
+        clearTimeout(slowTimer);
+        slow = false;
         busy = false;
         save();
         render();
@@ -276,7 +285,8 @@
     });
     if (busy) {
       html += '<div class="acw-row acw-agent acw-typing"><div class="acw-avatar">' + ICONS.agent + '</div>' +
-        '<div class="acw-col"><div class="acw-bubble" aria-label="Agent is typing"><span></span><span></span><span></span></div></div></div>';
+        '<div class="acw-col"><div class="acw-bubble" aria-label="Agent is typing"><span></span><span></span><span></span></div>' +
+        (slow ? '<div class="acw-meta">Still working on it…</div>' : '') + '</div></div>';
     }
     els.body.innerHTML = html;
     els.send.disabled = busy;
