@@ -181,7 +181,7 @@
       var timer = setTimeout(function () { if (controller) controller.abort(); }, CONFIG.requestTimeoutMs);
       return fetch(CONFIG.endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
         body: JSON.stringify(payload),
         cache: 'no-store',
         signal: controller ? controller.signal : undefined
