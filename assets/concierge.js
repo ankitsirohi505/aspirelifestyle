@@ -72,13 +72,13 @@
     root.className = 'acw';
     root.innerHTML =
       '<button class="acw-launcher" type="button" aria-label="Open chat">' + ICONS.chat + '<span>' + esc(CONFIG.launcherText) + '</span></button>' +
-      '<section class="acw-window" role="dialog" aria-label="' + esc(CONFIG.agentName) + ' chat">' +
-        '<header class="acw-header">' +
+      '<div class="acw-window" role="dialog" aria-label="' + esc(CONFIG.agentName) + ' chat">' +
+        '<div class="acw-header">' +
           ICONS.chat.replace('<svg', '<svg class="acw-logo"') +
           '<div class="acw-title">' + esc(CONFIG.agentName) + '</div>' +
           '<button class="acw-icon-btn acw-more" type="button" aria-label="More options">' + ICONS.more + '</button>' +
           '<button class="acw-icon-btn acw-min" type="button" aria-label="Minimise chat">' + ICONS.chevron + '</button>' +
-        '</header>' +
+        '</div>' +
         '<div class="acw-menu" role="menu"><button type="button" class="acw-end" role="menuitem">End conversation</button></div>' +
         '<div class="acw-body" aria-live="polite"></div>' +
         '<div class="acw-composer">' +
@@ -89,7 +89,7 @@
           '</div>' +
         '</div>' +
         '<div class="acw-footer">Powered by Agentforce from ' + ICONS.cloud + '<b>salesforce</b></div>' +
-      '</section>';
+      '</div>';
     document.body.appendChild(root);
 
     els.root = root;

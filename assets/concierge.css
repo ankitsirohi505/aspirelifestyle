@@ -1,5 +1,7 @@
 /* Aspire Concierge chat widget — styled after the Salesforce Enhanced Chat (Agentforce) window. */
 .acw, .acw * { box-sizing: border-box; }
+.acw div, .acw button, .acw textarea { margin: 0; }
+.acw .acw-window, .acw .acw-header, .acw .acw-body { text-transform: none; letter-spacing: normal; }
 .acw {
   --acw-ink: #181818;
   --acw-muted: #5c5c5c;
@@ -31,7 +33,7 @@
   position: fixed; right: 24px; bottom: 24px; z-index: 2147483001;
   width: 420px; height: min(680px, calc(100vh - 110px));
   display: none; flex-direction: column;
-  background: #fff; border-radius: 18px; overflow: hidden;
+  background: #fff; border-radius: 18px; overflow: hidden; padding: 0;
   box-shadow: 0 12px 48px rgba(0,0,0,.22);
 }
 .acw-open .acw-window { display: flex; animation: acwIn .18s ease-out; }
