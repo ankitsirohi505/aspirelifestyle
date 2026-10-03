@@ -6,13 +6,12 @@
   'use strict';
 
   var CONFIG = {
-    endpoint: 'https://orgfarm-e88355df2d-dev-ed.develop.my.site.com/ESWAspireConciergeChat1791041414849vforc/services/apexrest/aspireConcierge/chat',
+    endpoint: 'https://orgfarm-e88355df2d-dev-ed.develop.my.salesforce-sites.com/aspireconcierge/services/apexrest/aspireConcierge/chat',
     agentName: 'Aspire Travel Concierge',
     launcherText: 'Ask Me Anything',
     welcome: 'Welcome to Aspire Concierge. I can plan and book trips tailored to you. To get started, what is your email address?',
     requestTimeoutMs: 20000,
-    warmupTimeoutMs: 12000,
-    storageKey: 'aspireConciergeChat.v2'
+    warmupTimeoutMs: 12000
   };
 
   var ICONS = {
@@ -34,19 +33,15 @@
   };
 
   // ───────────── state ─────────────
-  var state = load() || freshState();
+  // The conversation lives only in this page: every reload starts closed with a fresh chat.
+  var state = freshState();
   var busy = false;
   var els = {};
 
   function freshState() {
     return { open: false, started: false, items: [], agentSessionId: null, customerSessionId: null, capturedEmail: null };
   }
-  function load() {
-    try { return JSON.parse(sessionStorage.getItem(CONFIG.storageKey)); } catch (e) { return null; }
-  }
-  function save() {
-    try { sessionStorage.setItem(CONFIG.storageKey, JSON.stringify(state)); } catch (e) { /* storage unavailable */ }
-  }
+  function save() { /* intentionally not persisted */ }
 
   // ───────────── helpers ─────────────
   function esc(s) {
@@ -380,7 +375,7 @@
   // ───────────── start ─────────────
   function init() {
     build();
-    if (state.open) setOpen(true);
+    try { sessionStorage.removeItem('aspireConciergeChat.v1'); sessionStorage.removeItem('aspireConciergeChat.v2'); } catch (e) { /* ignore */ }
   }
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
