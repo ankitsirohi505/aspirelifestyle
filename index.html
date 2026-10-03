@@ -183,24 +183,83 @@
       toTop.classList.toggle('show', window.scrollY > 600);
     }, { passive: true });
   </script>
-  <!-- Aspire Concierge: Salesforce Embedded Messaging (Enhanced Chat v2) with the Aspire Travel Concierge Agentforce service agent -->
+  <!-- Aspire Concierge: Salesforce Embedded Messaging (Enhanced Chat v2) with the Aspire Travel Concierge Agentforce service agent.
+       The Salesforce script is loaded only after the page has finished loading, and a placeholder launcher
+       shows the chat state until Salesforce's own chat button is ready. -->
+  <button class="concierge-launcher" id="conciergeLauncher" type="button" aria-live="polite">
+    <span class="concierge-dot"></span><span class="concierge-label">Connecting to Concierge…</span>
+  </button>
   <script type='text/javascript'>
-    function initEmbeddedMessaging() {
-      try {
-        embeddedservice_bootstrap.settings.language = 'en_US';
-        embeddedservice_bootstrap.init(
-          '00Daj000016HMHu',
-          'Aspire_Concierge_Chat',
-          'https://orgfarm-e88355df2d-dev-ed.develop.my.site.com/ESWAspireConciergeChat1791041414849',
-          {
-            scrt2URL: 'https://orgfarm-e88355df2d-dev-ed.develop.my.salesforce-scrt.com'
-          }
-        );
-      } catch (err) {
-        console.error('Error loading Embedded Messaging: ', err);
+    (function () {
+      var ESW_ORG = '00Daj000016HMHu';
+      var ESW_DEPLOYMENT = 'Aspire_Concierge_Chat';
+      var ESW_SITE = 'https://orgfarm-e88355df2d-dev-ed.develop.my.site.com/ESWAspireConciergeChat1791041414849';
+      var ESW_SCRT = 'https://orgfarm-e88355df2d-dev-ed.develop.my.salesforce-scrt.com';
+      var READY_TIMEOUT_MS = 30000;
+
+      var launcher = document.getElementById('conciergeLauncher');
+      var label = launcher.querySelector('.concierge-label');
+      var ready = false, wantsOpen = false, failed = false;
+
+      function setState(state, text) {
+        launcher.dataset.state = state;
+        label.textContent = text;
       }
-    };
+
+      function openChat() {
+        try {
+          embeddedservice_bootstrap.utilAPI.launchChat();
+        } catch (e) {
+          console.error('Could not open Concierge chat: ', e);
+        }
+      }
+
+      launcher.addEventListener('click', function () {
+        if (failed) { window.location.reload(); return; }
+        if (ready) { openChat(); return; }
+        wantsOpen = true;
+        setState('connecting', 'Opening chat as soon as it is ready…');
+      });
+
+      window.addEventListener('onEmbeddedMessagingButtonCreated', function () {
+        ready = true;
+        launcher.dataset.state = 'ready';
+        launcher.hidden = true;
+        if (wantsOpen) openChat();
+      });
+
+      function fail(reason) {
+        if (ready) return;
+        failed = true;
+        console.error('Aspire Concierge chat did not load: ' + reason);
+        setState('failed', 'Chat could not load. Tap to retry');
+      }
+
+      function initEmbeddedMessaging() {
+        try {
+          embeddedservice_bootstrap.settings.language = 'en_US';
+          embeddedservice_bootstrap.init(ESW_ORG, ESW_DEPLOYMENT, ESW_SITE, { scrt2URL: ESW_SCRT });
+        } catch (err) {
+          fail(err && err.message ? err.message : String(err));
+        }
+      }
+
+      function loadChat() {
+        var script = document.createElement('script');
+        script.src = ESW_SITE + '/assets/js/bootstrap.min.js';
+        script.async = true;
+        script.onload = initEmbeddedMessaging;
+        script.onerror = function () { fail('bootstrap script blocked or unreachable'); };
+        document.body.appendChild(script);
+        setTimeout(function () { fail('timed out after ' + READY_TIMEOUT_MS / 1000 + 's'); }, READY_TIMEOUT_MS);
+      }
+
+      if (document.readyState === 'complete') {
+        loadChat();
+      } else {
+        window.addEventListener('load', loadChat);
+      }
+    })();
   </script>
-  <script type='text/javascript' src='https://orgfarm-e88355df2d-dev-ed.develop.my.site.com/ESWAspireConciergeChat1791041414849/assets/js/bootstrap.min.js' onload='initEmbeddedMessaging()'></script>
 </body>
 </html>
