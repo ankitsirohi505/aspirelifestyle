@@ -285,7 +285,14 @@
     }
     els.body.innerHTML = html;
     els.send.disabled = busy;
-    els.body.scrollTop = els.body.scrollHeight;
+    // Show a new agent reply from its first line, so a tall card never hides the message above it.
+    var rows = els.body.querySelectorAll('.acw-row');
+    var last = rows[rows.length - 1];
+    if (!busy && last && last.classList.contains('acw-has-card')) {
+      els.body.scrollTop = Math.max(0, last.offsetTop - 12);
+    } else {
+      els.body.scrollTop = els.body.scrollHeight;
+    }
   }
 
   function renderCard(card, interactive) {
