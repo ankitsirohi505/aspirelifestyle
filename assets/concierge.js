@@ -213,13 +213,18 @@
         signal: controller ? controller.signal : undefined
       }).then(function (r) {
         clearTimeout(timer);
-        if (!r.ok) throw new Error('HTTP ' + r.status);
+        if (r.status >= 500) throw new Error('HTTP ' + r.status);
+        if (!r.ok) { var e = new Error('HTTP ' + r.status); e.fatal = true; throw e; }
         return r.json();
-      }, function (err) {
+      }).catch(function (err) {
         clearTimeout(timer);
-        if (err && err.name === 'AbortError' && retriesLeft > 0) {
-          console.warn('Concierge request stalled, retrying');
-          return attempt(retriesLeft - 1);
+        // Stalls (AbortError), dropped connections (TypeError) and server errors (5xx) are retried.
+        console.warn('Concierge request failed (' + (err && (err.name + ': ' + err.message)) + ')' +
+          (retriesLeft > 0 && !(err && err.fatal) ? ', retrying' : ''));
+        if (retriesLeft > 0 && !(err && err.fatal)) {
+          return new Promise(function (resolve) { setTimeout(resolve, 1500); }).then(function () {
+            return attempt(retriesLeft - 1);
+          });
         }
         throw err;
       });
