@@ -33,7 +33,7 @@
   position: fixed; right: 24px; bottom: 24px; z-index: 2147483001;
   width: 420px; height: min(680px, calc(100vh - 110px));
   display: none; flex-direction: column;
-  background: #fff; border-radius: 18px; overflow: hidden; padding: 0;
+  background: #fff; color: var(--acw-ink); border-radius: 18px; overflow: hidden; padding: 0;
   box-shadow: 0 12px 48px rgba(0,0,0,.22);
 }
 .acw-open .acw-window { display: flex; animation: acwIn .18s ease-out; }
@@ -43,7 +43,7 @@
   display: flex; align-items: center; gap: 12px;
   padding: 18px 20px; border-bottom: 1px solid var(--acw-line); flex-shrink: 0;
 }
-.acw-header svg.acw-logo { width: 30px; height: 30px; flex-shrink: 0; }
+.acw-header svg.acw-logo { width: 30px; height: 30px; flex-shrink: 0; color: var(--acw-ink); display: block; }
 .acw-title { flex: 1; font-size: 21px; font-weight: 700; letter-spacing: -.01em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .acw-icon-btn {
   width: 36px; height: 36px; border: 0; background: none; border-radius: 8px; cursor: pointer;
