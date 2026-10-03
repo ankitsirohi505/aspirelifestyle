@@ -81,7 +81,9 @@
 .acw-bubble a { color: #0b5cab; }
 .acw-user .acw-bubble a { color: #fff; }
 .acw-meta { font-size: 13px; color: var(--acw-muted); margin: 6px 4px 18px; }
-.acw-card-wrap { margin: 2px 0 14px 42px; }
+.acw-has-card .acw-col { flex: 1; max-width: calc(100% - 42px); }
+.acw-col .acw-bubble + .acw-bubble { margin-top: 6px; }
+.acw-card-inline { margin-top: 8px; }
 .acw-error .acw-bubble { background: #fdecea; color: #8a1c13; }
 
 /* Typing indicator */

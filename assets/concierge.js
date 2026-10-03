@@ -12,7 +12,7 @@
     welcome: 'Welcome to Aspire Concierge. I can plan and book trips tailored to you. To get started, what is your email address?',
     requestTimeoutMs: 20000,
     warmupTimeoutMs: 12000,
-    storageKey: 'aspireConciergeChat.v1'
+    storageKey: 'aspireConciergeChat.v2'
   };
 
   var ICONS = {
@@ -24,6 +24,9 @@
     send: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>',
     cloud: '<svg viewBox="0 0 44 30"><path fill="#00A1E0" d="M18.3 3.3A7.7 7.7 0 0 1 23.9 1a7.8 7.8 0 0 1 6.8 4 9.4 9.4 0 0 1 3.8-.8A9.5 9.5 0 0 1 44 13.7a9.5 9.5 0 0 1-11.3 9.3 6.9 6.9 0 0 1-9 2.8 7.9 7.9 0 0 1-14.6-.4 7.3 7.3 0 0 1-1.5.2A7.4 7.4 0 0 1 4 11.9a8.4 8.4 0 0 1 7.4-12.5 8.4 8.4 0 0 1 6.9 3.9z"/></svg>'
   };
+
+  // Card types the widget shows; others (such as the customer profile) are used by the agent only.
+  var SHOWN_CARDS = ['flightOptions', 'booking'];
 
   var AIRLINE_COLOURS = {
     'Emirates': '#c8102e', 'British Airways': '#075aaa', 'Virgin Atlantic': '#8f0d3c',
@@ -150,7 +153,7 @@
     if (open && !state.started) {
       state.started = true;
       state.joinedAt = Date.now();
-      push({ kind: 'agent', text: CONFIG.welcome, ts: Date.now() });
+      push({ kind: 'agent', texts: [CONFIG.welcome], cards: [], ts: Date.now() });
     }
     save();
     if (open) {
@@ -226,16 +229,18 @@
         if (res.customerSessionId) state.customerSessionId = res.customerSessionId;
         if (res.capturedEmail) state.capturedEmail = res.capturedEmail;
         var now = Date.now();
-        (res.cards || []).forEach(function (c) { state.items.push({ kind: 'card', card: c, ts: now }); });
-        (res.replies || []).forEach(function (t) { state.items.push({ kind: 'agent', text: t, ts: now }); });
-        if (!(res.replies || []).length && !(res.cards || []).length) {
-          state.items.push({ kind: 'error', text: res.error ? 'Sorry, something went wrong. Please try again.' : 'Sorry, I did not catch that. Could you try again?', ts: now });
+        var cards = (res.cards || []).filter(function (c) { return SHOWN_CARDS.indexOf(c.type) !== -1; });
+        var texts = (res.replies || []).filter(function (t) { return t && String(t).trim(); });
+        if (texts.length || cards.length) {
+          state.items.push({ kind: 'agent', texts: texts, cards: cards, ts: now });
+        } else {
+          state.items.push({ kind: 'error', texts: [res.error ? 'Sorry, something went wrong. Please try again.' : 'Sorry, I did not catch that. Could you try again?'], ts: now });
           if (res.error) console.error('Concierge error:', res.error);
         }
       })
       .catch(function (err) {
         console.error('Concierge request failed:', err);
-        state.items.push({ kind: 'error', text: 'I could not reach the concierge just now. Please check your connection and try again.', ts: Date.now() });
+        state.items.push({ kind: 'error', texts: ['I could not reach the concierge just now. Please check your connection and try again.'], ts: Date.now() });
       })
       .then(function () {
         busy = false;
@@ -250,22 +255,29 @@
     if (state.started) {
       html += '<div class="acw-system">' + esc(CONFIG.agentName) + ' joined<br>' + esc(timeLabel(state.joinedAt || Date.now())) + '</div>';
     }
-    var lastFlightIdx = -1;
-    state.items.forEach(function (it, i) { if (it.kind === 'card' && it.card.type === 'flightOptions') lastFlightIdx = i; });
-    var bookedAfter = state.items.some(function (it, i) { return i > lastFlightIdx && it.kind === 'card' && it.card.type === 'booking'; });
+    var lastFlightIdx = -1, bookedAfter = false;
+    state.items.forEach(function (it, i) {
+      (it.cards || []).forEach(function (c) {
+        if (c.type === 'flightOptions') { lastFlightIdx = i; bookedAfter = false; }
+        if (c.type === 'booking' && lastFlightIdx !== -1) bookedAfter = true;
+      });
+    });
 
     state.items.forEach(function (it, i) {
       if (it.kind === 'user') {
         html += '<div class="acw-row acw-user"><div class="acw-col"><div class="acw-bubble">' + richText(it.text) + '</div>' +
           '<div class="acw-meta">Sent · ' + esc(timeLabel(it.ts)) + '</div></div></div>';
-      } else if (it.kind === 'agent' || it.kind === 'error') {
-        html += '<div class="acw-row acw-agent' + (it.kind === 'error' ? ' acw-error' : '') + '"><div class="acw-avatar">' + ICONS.agent + '</div>' +
-          '<div class="acw-col"><div class="acw-bubble">' + richText(it.text) + '</div>' +
-          '<div class="acw-meta">' + esc(CONFIG.agentName) + ' · ' + esc(timeLabel(it.ts)) + '</div></div></div>';
-      } else if (it.kind === 'card') {
-        var interactive = it.card.type === 'flightOptions' && i === lastFlightIdx && !bookedAfter;
-        html += '<div class="acw-card-wrap">' + renderCard(it.card, interactive) + '</div>';
+        return;
       }
+      var cards = it.cards || [];
+      html += '<div class="acw-row acw-agent' + (it.kind === 'error' ? ' acw-error' : '') + (cards.length ? ' acw-has-card' : '') + '">' +
+        '<div class="acw-avatar">' + ICONS.agent + '</div><div class="acw-col">';
+      (it.texts || []).forEach(function (t) { html += '<div class="acw-bubble">' + richText(t) + '</div>'; });
+      cards.forEach(function (c) {
+        var interactive = c.type === 'flightOptions' && i === lastFlightIdx && !bookedAfter;
+        html += '<div class="acw-card-inline">' + renderCard(c, interactive) + '</div>';
+      });
+      html += '<div class="acw-meta">' + esc(CONFIG.agentName) + ' · ' + esc(timeLabel(it.ts)) + '</div></div></div>';
     });
     if (busy) {
       html += '<div class="acw-row acw-agent acw-typing"><div class="acw-avatar">' + ICONS.agent + '</div>' +
