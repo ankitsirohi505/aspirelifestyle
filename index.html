@@ -9,6 +9,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@200;300;400;500;600&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://orgfarm-e88355df2d-dev-ed.develop.my.site.com" crossorigin>
+  <link rel="preconnect" href="https://orgfarm-e88355df2d-dev-ed.develop.my.salesforce-scrt.com" crossorigin>
   <link rel="stylesheet" href="assets/styles.css">
 </head>
 <body>
@@ -195,7 +197,7 @@
       var ESW_DEPLOYMENT = 'Aspire_Concierge_Chat';
       var ESW_SITE = 'https://orgfarm-e88355df2d-dev-ed.develop.my.site.com/ESWAspireConciergeChat1791041414849';
       var ESW_SCRT = 'https://orgfarm-e88355df2d-dev-ed.develop.my.salesforce-scrt.com';
-      var READY_TIMEOUT_MS = 30000;
+      var READY_TIMEOUT_MS = 45000;
 
       var launcher = document.getElementById('conciergeLauncher');
       var label = launcher.querySelector('.concierge-label');
@@ -235,7 +237,11 @@
         setState('failed', 'Chat could not load. Tap to retry');
       }
 
+      var initialised = false;
+
       function initEmbeddedMessaging() {
+        if (initialised) return;
+        initialised = true;
         try {
           embeddedservice_bootstrap.settings.language = 'en_US';
           embeddedservice_bootstrap.init(ESW_ORG, ESW_DEPLOYMENT, ESW_SITE, { scrt2URL: ESW_SCRT });
@@ -244,13 +250,47 @@
         }
       }
 
-      function loadChat() {
+      // The Salesforce site serving the chat script occasionally stalls a request indefinitely.
+      // Rather than wait on it, request the script again on a fresh URL after SCRIPT_TIMEOUT_MS.
+      var SCRIPT_TIMEOUT_MS = 8000;
+      var MAX_ATTEMPTS = 4;
+
+      function loadScript(attempt) {
+        var settled = false;
         var script = document.createElement('script');
-        script.src = ESW_SITE + '/assets/js/bootstrap.min.js';
         script.async = true;
-        script.onload = initEmbeddedMessaging;
-        script.onerror = function () { fail('bootstrap script blocked or unreachable'); };
+        script.src = attempt === 0
+          ? ESW_SITE + '/assets/js/bootstrap.min.js'
+          : ESW_SITE + '/assets/js/init.min.js?retry=' + attempt + '&t=' + Date.now();
+        var timer = setTimeout(function () {
+          if (settled || initialised) return;
+          settled = true;
+          console.warn('Concierge chat script stalled (attempt ' + (attempt + 1) + '), retrying');
+          retry(attempt);
+        }, SCRIPT_TIMEOUT_MS);
+        script.onload = function () {
+          clearTimeout(timer);
+          if (window.embeddedservice_bootstrap) initEmbeddedMessaging();
+        };
+        script.onerror = function () {
+          clearTimeout(timer);
+          if (settled || initialised) return;
+          settled = true;
+          retry(attempt);
+        };
         document.body.appendChild(script);
+      }
+
+      function retry(attempt) {
+        if (attempt + 1 < MAX_ATTEMPTS) {
+          loadScript(attempt + 1);
+        } else {
+          fail('chat script did not load after ' + MAX_ATTEMPTS + ' attempts');
+        }
+      }
+
+      function loadChat() {
+        loadScript(0);
         setTimeout(function () { fail('timed out after ' + READY_TIMEOUT_MS / 1000 + 's'); }, READY_TIMEOUT_MS);
       }
 
