@@ -237,7 +237,7 @@ section { padding: clamp(64px, 9vw, 120px) clamp(16px, 5vw, 64px); }
 
 /* Back to top */
 .to-top {
-  position: fixed; right: 20px; bottom: 20px; z-index: 40;
+  position: fixed; right: 20px; bottom: 96px; z-index: 40;
   width: 40px; height: 40px; border-radius: 50%;
   display: grid; place-items: center;
   background: #fff; border: 1px solid var(--line); color: var(--coral);

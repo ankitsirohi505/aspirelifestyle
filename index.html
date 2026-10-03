@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1">
   <meta name="robots" content="noindex, nofollow">
   <title>Aspire Lifestyles — Concierge &amp; Loyalty (Demo Prototype)</title>
   <meta name="description" content="Demo prototype of a loyalty and concierge services website. Not the official Aspire Lifestyles site.">
@@ -183,5 +183,24 @@
       toTop.classList.toggle('show', window.scrollY > 600);
     }, { passive: true });
   </script>
+  <!-- Aspire Concierge: Salesforce Embedded Messaging (Enhanced Chat v2) with the Aspire Travel Concierge Agentforce service agent -->
+  <script type='text/javascript'>
+    function initEmbeddedMessaging() {
+      try {
+        embeddedservice_bootstrap.settings.language = 'en_US';
+        embeddedservice_bootstrap.init(
+          '00Daj000016HMHu',
+          'Aspire_Concierge_Chat',
+          'https://orgfarm-e88355df2d-dev-ed.develop.my.site.com/ESWAspireConciergeChat1791041414849',
+          {
+            scrt2URL: 'https://orgfarm-e88355df2d-dev-ed.develop.my.salesforce-scrt.com'
+          }
+        );
+      } catch (err) {
+        console.error('Error loading Embedded Messaging: ', err);
+      }
+    };
+  </script>
+  <script type='text/javascript' src='https://orgfarm-e88355df2d-dev-ed.develop.my.site.com/ESWAspireConciergeChat1791041414849/assets/js/bootstrap.min.js' onload='initEmbeddedMessaging()'></script>
 </body>
 </html>
