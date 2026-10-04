@@ -366,7 +366,7 @@
         (interactive ? '<button type="button" class="acw-select" data-rank="' + esc(o.rank) + '">Select this flight</button>' : '') +
         '</div>';
     });
-    h += '<div class="acw-fo-foot">' + (interactive ? 'Select a flight, or reply with 1, 2 or 3' : 'Options presented') + ' · Case ' + esc(d.travelCaseNumber) + '</div></div>';
+    h += '<div class="acw-fo-foot">' + (interactive ? 'Select a flight, or reply with 1, 2 or 3' : 'Options presented') + '</div></div>';
     return h;
   }
 
