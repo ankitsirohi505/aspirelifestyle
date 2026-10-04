@@ -6,20 +6,13 @@
   'use strict';
 
   var CONFIG = {
-    // Two addresses for the same endpoint. They use different certificates, so the browser opens a
-    // separate connection to each: a retry on the other address never waits behind a stuck connection.
-    endpoints: [
-      'https://orgfarm-e88355df2d-dev-ed.develop.my.salesforce-sites.com/aspireconcierge/services/apexrest/aspireConcierge/assist',
-      'https://orgfarm-e88355df2d-dev-ed.develop.my.site.com/ESWAspireConciergeChat1791041414849vforc/services/apexrest/aspireConcierge/assist'
-    ],
+    endpoint: 'https://orgfarm-e88355df2d-dev-ed.develop.my.salesforce-sites.com/aspireconcierge/services/apexrest/aspireConcierge/assist',
     historyTurns: 12,
     agentName: 'Aspire Travel Concierge',
     launcherText: 'Ask Me Anything',
     welcome: 'Welcome to Aspire Concierge. I can plan and book trips tailored to you. To get started, what is your email address?',
-    requestTimeoutMs: 12000,
-    requestRetries: 3,
     slowNoticeMs: 8000,
-    warmupTimeoutMs: 12000
+    verySlowNoticeMs: 30000,
   };
 
   var ICONS = {
@@ -44,8 +37,8 @@
   // The conversation lives only in this page: every reload starts closed with a fresh chat.
   var state = freshState();
   var busy = false;
-  var slow = false;
-  var slowTimer = null;
+  var slow = 0;
+  var slowTimer = null, verySlowTimer = null;
   var els = {};
 
   function freshState() {
@@ -109,7 +102,6 @@
     els.menu = root.querySelector('.acw-menu');
 
     els.launcher.addEventListener('click', function () { setOpen(true); });
-    els.launcher.addEventListener('mouseenter', function () { warmUp(); });
     root.querySelector('.acw-min').addEventListener('click', function () { setOpen(false); });
     root.querySelector('.acw-more').addEventListener('click', function (e) {
       e.stopPropagation();
@@ -133,23 +125,7 @@
     });
   }
 
-  // The first connection to the Salesforce site occasionally stalls. Open it with a tiny request
-  // as soon as the chat opens, abandoning and repeating any attempt that stalls.
-  var warmedUp = false;
-  function warmUp() {
-    if (warmedUp) return;
-    warmedUp = true;
-    CONFIG.endpoints.forEach(function (url) {
-      var controller = window.AbortController ? new AbortController() : null;
-      var timer = setTimeout(function () { if (controller) controller.abort(); }, CONFIG.warmupTimeoutMs);
-      fetch(url, { method: 'GET', cache: 'no-store', signal: controller ? controller.signal : undefined })
-        .catch(function () { /* stalled or offline */ })
-        .then(function () { clearTimeout(timer); });
-    });
-  }
-
   function setOpen(open) {
-    if (open) warmUp();
     state.open = open;
     els.root.classList.toggle('acw-open', open);
     if (open && !state.started) {
@@ -191,9 +167,11 @@
   function send(text) {
     push({ kind: 'user', text: text, ts: Date.now() });
     busy = true;
-    slow = false;
+    slow = 0;
     clearTimeout(slowTimer);
-    slowTimer = setTimeout(function () { if (busy) { slow = true; render(); } }, CONFIG.slowNoticeMs);
+    clearTimeout(verySlowTimer);
+    slowTimer = setTimeout(function () { if (busy) { slow = 1; render(); } }, CONFIG.slowNoticeMs);
+    verySlowTimer = setTimeout(function () { if (busy) { slow = 2; render(); } }, CONFIG.verySlowNoticeMs);
     render();
 
     // The backend is stateless: send the recent conversation and the trip state with each message.
@@ -209,39 +187,17 @@
       state: state.trip || {}
     };
 
-    // A request to the Salesforce site occasionally stalls without any response; give up on it
-    // after requestTimeoutMs and send it once more on a fresh request.
-    var attemptNo = 0;
-    function attempt(retriesLeft) {
-      var url = CONFIG.endpoints[attemptNo++ % CONFIG.endpoints.length];
-      var controller = window.AbortController ? new AbortController() : null;
-      var timer = setTimeout(function () { if (controller) controller.abort(); }, CONFIG.requestTimeoutMs);
-      return fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
-        body: JSON.stringify(payload),
-        cache: 'no-store',
-        signal: controller ? controller.signal : undefined
-      }).then(function (r) {
-        clearTimeout(timer);
-        if (r.status >= 500) throw new Error('HTTP ' + r.status);
-        if (!r.ok) { var e = new Error('HTTP ' + r.status); e.fatal = true; throw e; }
+    // One request per message, never cancelled or repeated: the Salesforce edge can throttle
+    // clients that cancel and resend requests. If it is slow we simply keep waiting.
+    fetch(CONFIG.endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
         return r.json();
-      }).catch(function (err) {
-        clearTimeout(timer);
-        // Stalls (AbortError), dropped connections (TypeError) and server errors (5xx) are retried.
-        console.warn('Concierge request failed (' + (err && (err.name + ': ' + err.message)) + ')' +
-          (retriesLeft > 0 && !(err && err.fatal) ? ', retrying' : ''));
-        if (retriesLeft > 0 && !(err && err.fatal)) {
-          return new Promise(function (resolve) { setTimeout(resolve, 500); }).then(function () {
-            return attempt(retriesLeft - 1);
-          });
-        }
-        throw err;
-      });
-    }
-
-    attempt(CONFIG.requestRetries)
+      })
       .then(function (res) {
         if (res.state) state.trip = res.state;
         var now = Date.now();
@@ -260,7 +216,8 @@
       })
       .then(function () {
         clearTimeout(slowTimer);
-        slow = false;
+        clearTimeout(verySlowTimer);
+        slow = 0;
         busy = false;
         save();
         render();
@@ -300,7 +257,8 @@
     if (busy) {
       html += '<div class="acw-row acw-agent acw-typing"><div class="acw-avatar">' + ICONS.agent + '</div>' +
         '<div class="acw-col"><div class="acw-bubble" aria-label="Agent is typing"><span></span><span></span><span></span></div>' +
-        (slow ? '<div class="acw-meta">Still working on it…</div>' : '') + '</div></div>';
+        (slow === 1 ? '<div class="acw-meta">Still working on it…</div>' : '') +
+        (slow === 2 ? '<div class="acw-meta">Taking longer than usual. Please stay with me…</div>' : '') + '</div></div>';
     }
     els.body.innerHTML = html;
     els.send.disabled = busy;
