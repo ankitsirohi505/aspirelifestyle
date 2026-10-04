@@ -6,7 +6,14 @@
   'use strict';
 
   var CONFIG = {
-    endpoint: 'https://orgfarm-e88355df2d-dev-ed.develop.my.salesforce-sites.com/aspireconcierge/services/apexrest/aspireConcierge/assist',
+    // The same endpoint on two Salesforce addresses (different certificates, so separate browser
+    // connections). Normally only the first is used.
+    endpoints: [
+      'https://orgfarm-e88355df2d-dev-ed.develop.my.salesforce-sites.com/aspireconcierge/services/apexrest/aspireConcierge/assist',
+      'https://orgfarm-e88355df2d-dev-ed.develop.my.site.com/ESWAspireConciergeChat1791041414849vforc/services/apexrest/aspireConcierge/assist'
+    ],
+    // If no reply arrives, send a copy on a fresh connection at these delays. Nothing is cancelled.
+    backupDelaysMs: [8000, 25000],
     historyTurns: 12,
     agentName: 'Aspire Travel Concierge',
     launcherText: 'Ask Me Anything',
@@ -187,17 +194,42 @@
       state: state.trip || {}
     };
 
-    // One request per message, never cancelled or repeated: the Salesforce edge can throttle
-    // clients that cancel and resend requests. If it is slow we simply keep waiting.
-    fetch(CONFIG.endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+    // A pooled browser connection to Salesforce can go silently dead while the page is idle; a
+    // message sent on it waits minutes for TCP to give up. So if no reply arrives quickly, send a
+    // copy to the second address, which always uses a fresh connection. Requests are never
+    // cancelled (the Salesforce edge can throttle clients that cancel); the first reply wins and
+    // late duplicates are ignored. Duplicates are harmless on the server (booking is idempotent).
+    new Promise(function (resolve, reject) {
+      var done = false, failed = 0, sent = 0, timers = [];
+      var total = CONFIG.backupDelaysMs.length + 1;
+      function send(url) {
+        sent++;
+        fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+          .then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+          })
+          .then(function (json) {
+            if (done) return;
+            done = true;
+            timers.forEach(clearTimeout);
+            resolve(json);
+          })
+          .catch(function (err) {
+            if (done) return;
+            failed++;
+            console.warn('Concierge request failed (' + (err && (err.name + ': ' + err.message)) + ')');
+            if (failed >= total) { done = true; timers.forEach(clearTimeout); reject(err); }
+            else if (failed >= sent) send(CONFIG.endpoints[sent % CONFIG.endpoints.length]);
+          });
+      }
+      send(CONFIG.endpoints[0]);
+      CONFIG.backupDelaysMs.forEach(function (ms, i) {
+        timers.push(setTimeout(function () {
+          if (!done && sent < total) send(CONFIG.endpoints[(i + 1) % CONFIG.endpoints.length]);
+        }, ms));
+      });
     })
-      .then(function (r) {
-        if (!r.ok) throw new Error('HTTP ' + r.status);
-        return r.json();
-      })
       .then(function (res) {
         if (res.state) state.trip = res.state;
         var now = Date.now();
