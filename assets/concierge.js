@@ -13,7 +13,9 @@
       'https://orgfarm-e88355df2d-dev-ed.develop.my.site.com/ESWAspireConciergeChat1791041414849vforc/services/apexrest/aspireConcierge/assist'
     ],
     // If no reply arrives, send a copy on a fresh connection at these delays. Nothing is cancelled.
-    backupDelaysMs: [8000, 25000],
+    backupDelaysMs: [6000, 15000, 30000],
+    // While the chat is open, touch both connections regularly so an idle one is never silently dropped.
+    heartbeatMs: 20000,
     historyTurns: 12,
     agentName: 'Aspire Travel Concierge',
     launcherText: 'Ask Me Anything',
@@ -132,7 +134,23 @@
     });
   }
 
+  var heartbeat = null;
+  function beat() {
+    CONFIG.endpoints.forEach(function (url) {
+      fetch(url, { method: 'GET', cache: 'no-store' }).catch(function () { /* ignore */ });
+    });
+  }
+  function setHeartbeat(on) {
+    clearInterval(heartbeat);
+    heartbeat = null;
+    if (on) {
+      beat();
+      heartbeat = setInterval(function () { if (!document.hidden) beat(); }, CONFIG.heartbeatMs);
+    }
+  }
+
   function setOpen(open) {
+    setHeartbeat(open);
     state.open = open;
     els.root.classList.toggle('acw-open', open);
     if (open && !state.started) {
