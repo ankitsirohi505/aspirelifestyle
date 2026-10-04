@@ -6,13 +6,18 @@
   'use strict';
 
   var CONFIG = {
-    endpoint: 'https://orgfarm-e88355df2d-dev-ed.develop.my.salesforce-sites.com/aspireconcierge/services/apexrest/aspireConcierge/assist',
+    // Two addresses for the same endpoint. They use different certificates, so the browser opens a
+    // separate connection to each: a retry on the other address never waits behind a stuck connection.
+    endpoints: [
+      'https://orgfarm-e88355df2d-dev-ed.develop.my.salesforce-sites.com/aspireconcierge/services/apexrest/aspireConcierge/assist',
+      'https://orgfarm-e88355df2d-dev-ed.develop.my.site.com/ESWAspireConciergeChat1791041414849vforc/services/apexrest/aspireConcierge/assist'
+    ],
     historyTurns: 12,
     agentName: 'Aspire Travel Concierge',
     launcherText: 'Ask Me Anything',
     welcome: 'Welcome to Aspire Concierge. I can plan and book trips tailored to you. To get started, what is your email address?',
-    requestTimeoutMs: 15000,
-    requestRetries: 2,
+    requestTimeoutMs: 12000,
+    requestRetries: 3,
     slowNoticeMs: 8000,
     warmupTimeoutMs: 12000
   };
@@ -104,7 +109,7 @@
     els.menu = root.querySelector('.acw-menu');
 
     els.launcher.addEventListener('click', function () { setOpen(true); });
-    els.launcher.addEventListener('mouseenter', function () { warmUp(3); });
+    els.launcher.addEventListener('mouseenter', function () { warmUp(); });
     root.querySelector('.acw-min').addEventListener('click', function () { setOpen(false); });
     root.querySelector('.acw-more').addEventListener('click', function (e) {
       e.stopPropagation();
@@ -130,24 +135,21 @@
 
   // The first connection to the Salesforce site occasionally stalls. Open it with a tiny request
   // as soon as the chat opens, abandoning and repeating any attempt that stalls.
-  var warmed = false, warming = false;
-  function warmUp(triesLeft) {
-    if (warmed || warming) return;
-    warming = true;
-    var controller = window.AbortController ? new AbortController() : null;
-    var timer = setTimeout(function () { if (controller) controller.abort(); }, CONFIG.warmupTimeoutMs);
-    fetch(CONFIG.endpoint, { method: 'GET', cache: 'no-store', signal: controller ? controller.signal : undefined })
-      .then(function (r) { warmed = r.ok; })
-      .catch(function () { /* stalled or offline */ })
-      .then(function () {
-        clearTimeout(timer);
-        warming = false;
-        if (!warmed && triesLeft > 0) warmUp(triesLeft - 1);
-      });
+  var warmedUp = false;
+  function warmUp() {
+    if (warmedUp) return;
+    warmedUp = true;
+    CONFIG.endpoints.forEach(function (url) {
+      var controller = window.AbortController ? new AbortController() : null;
+      var timer = setTimeout(function () { if (controller) controller.abort(); }, CONFIG.warmupTimeoutMs);
+      fetch(url, { method: 'GET', cache: 'no-store', signal: controller ? controller.signal : undefined })
+        .catch(function () { /* stalled or offline */ })
+        .then(function () { clearTimeout(timer); });
+    });
   }
 
   function setOpen(open) {
-    if (open) warmUp(3);
+    if (open) warmUp();
     state.open = open;
     els.root.classList.toggle('acw-open', open);
     if (open && !state.started) {
@@ -209,10 +211,12 @@
 
     // A request to the Salesforce site occasionally stalls without any response; give up on it
     // after requestTimeoutMs and send it once more on a fresh request.
+    var attemptNo = 0;
     function attempt(retriesLeft) {
+      var url = CONFIG.endpoints[attemptNo++ % CONFIG.endpoints.length];
       var controller = window.AbortController ? new AbortController() : null;
       var timer = setTimeout(function () { if (controller) controller.abort(); }, CONFIG.requestTimeoutMs);
-      return fetch(CONFIG.endpoint, {
+      return fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
         body: JSON.stringify(payload),
@@ -229,7 +233,7 @@
         console.warn('Concierge request failed (' + (err && (err.name + ': ' + err.message)) + ')' +
           (retriesLeft > 0 && !(err && err.fatal) ? ', retrying' : ''));
         if (retriesLeft > 0 && !(err && err.fatal)) {
-          return new Promise(function (resolve) { setTimeout(resolve, 1500); }).then(function () {
+          return new Promise(function (resolve) { setTimeout(resolve, 500); }).then(function () {
             return attempt(retriesLeft - 1);
           });
         }
