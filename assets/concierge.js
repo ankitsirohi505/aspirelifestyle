@@ -6,7 +6,8 @@
   'use strict';
 
   var CONFIG = {
-    endpoint: 'https://orgfarm-e88355df2d-dev-ed.develop.my.salesforce-sites.com/aspireconcierge/services/apexrest/aspireConcierge/chat',
+    endpoint: 'https://orgfarm-e88355df2d-dev-ed.develop.my.salesforce-sites.com/aspireconcierge/services/apexrest/aspireConcierge/assist',
+    historyTurns: 12,
     agentName: 'Aspire Travel Concierge',
     launcherText: 'Ask Me Anything',
     welcome: 'Welcome to Aspire Concierge. I can plan and book trips tailored to you. To get started, what is your email address?',
@@ -43,7 +44,7 @@
   var els = {};
 
   function freshState() {
-    return { open: false, started: false, items: [], agentSessionId: null, customerSessionId: null, capturedEmail: null };
+    return { open: false, started: false, items: [], trip: {} };
   }
   function save() { /* intentionally not persisted */ }
 
@@ -193,11 +194,17 @@
     slowTimer = setTimeout(function () { if (busy) { slow = true; render(); } }, CONFIG.slowNoticeMs);
     render();
 
+    // The backend is stateless: send the recent conversation and the trip state with each message.
+    var history = [];
+    state.items.forEach(function (it) {
+      if (it.kind === 'user') history.push({ role: 'customer', text: it.text });
+      else if (it.kind === 'agent') (it.texts || []).forEach(function (t) { history.push({ role: 'agent', text: t }); });
+    });
+    history.pop(); // the message being sent goes separately
     var payload = {
       message: text,
-      agentSessionId: state.agentSessionId,
-      customerSessionId: state.customerSessionId,
-      capturedEmail: state.capturedEmail
+      history: history.slice(-CONFIG.historyTurns),
+      state: state.trip || {}
     };
 
     // A request to the Salesforce site occasionally stalls without any response; give up on it
@@ -232,9 +239,7 @@
 
     attempt(CONFIG.requestRetries)
       .then(function (res) {
-        if (res.agentSessionId) state.agentSessionId = res.agentSessionId;
-        if (res.customerSessionId) state.customerSessionId = res.customerSessionId;
-        if (res.capturedEmail) state.capturedEmail = res.capturedEmail;
+        if (res.state) state.trip = res.state;
         var now = Date.now();
         var cards = (res.cards || []).filter(function (c) { return SHOWN_CARDS.indexOf(c.type) !== -1; });
         var texts = (res.replies || []).filter(function (t) { return t && String(t).trim(); });
