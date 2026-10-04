@@ -360,14 +360,16 @@
 
   function flightCard(d, interactive) {
     var opts = d.options || [];
+    // New customers have no history, so there is nothing to "match"; show plain facts instead.
+    var personal = d.personalised !== false;
     var h = '<div class="acw-card acw-fo"><div class="acw-card-head">' +
       '<div class="acw-fo-route">' + esc(d.route) + '</div>' +
       '<div class="acw-fo-meta">' + esc(d.travelDates) + ' · ' + esc(d.passengers) + '</div>' +
-      '<div class="acw-fo-sub">Ranked for you</div></div>';
+      '<div class="acw-fo-sub">' + (personal ? 'Ranked for you' : 'Sorted by stops and fare') + '</div></div>';
     opts.forEach(function (o) {
       var stopsText = o.stops === 0 ? 'Non-stop' : o.stops + ' stop' + (o.stops > 1 ? 's' : '');
       h += '<div class="acw-opt' + (o.recommended ? ' acw-opt-best' : '') + '">' +
-        (o.recommended ? '<div class="acw-ribbon">&#9733; Best match for you</div>' : '') +
+        (o.recommended ? '<div class="acw-ribbon">&#9733; ' + (personal ? 'Best match for you' : 'Top pick') + '</div>' : '') +
         '<div class="acw-opt-top"><div class="acw-rank">' + esc(o.rank) + '</div>' +
         '<div class="acw-logo" style="background:' + (AIRLINE_COLOURS[o.airline] || '#4a4a4a') + '">' + esc(String(o.flightNumber || '').slice(0, 2)) + '</div>' +
         '<div class="acw-airline"><b>' + esc(o.airline) + '</b><span>' + esc(o.flightNumber) + ' · ' + esc(o.cabin) + '</span></div>' +
@@ -376,9 +378,9 @@
         '<div class="acw-line">' + esc(o.duration) + '<div class="acw-bar">&#9992;</div>' +
         '<div class="acw-stops' + (o.stops === 0 ? ' acw-stops-direct' : '') + '">' + esc(stopsText) + '</div></div>' +
         '<div class="acw-t acw-t-right"><b>' + esc(o.arriveTime) + '</b><span>' + esc(o.destination) + '</span></div></div>' +
-        '<div class="acw-score"><div class="acw-score-row"><b>' + esc(o.matchScore) + '% match</b>' +
+        '<div class="acw-score"><div class="acw-score-row">' + (personal ? '<b>' + esc(o.matchScore) + '% match</b>' : '<span></span>') +
         (o.seatsLeft != null && o.seatsLeft <= 5 ? '<span class="acw-seats">Only ' + esc(o.seatsLeft) + ' seats left</span>' : '') + '</div>' +
-        '<div class="acw-track"><div class="acw-fill" style="width:' + Math.max(0, Math.min(100, o.matchScore || 0)) + '%"></div></div>' +
+        (personal ? '<div class="acw-track"><div class="acw-fill" style="width:' + Math.max(0, Math.min(100, o.matchScore || 0)) + '%"></div></div>' : '') +
         '<div class="acw-reason">' + esc(o.reason) + '</div></div>' +
         (interactive ? '<button type="button" class="acw-select" data-rank="' + esc(o.rank) + '">Select this flight</button>' : '') +
         '</div>';
