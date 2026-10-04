@@ -1,21 +1,13 @@
 // Aspire Concierge chat widget.
 // A custom front end, styled like the Salesforce Enhanced Chat window, that talks to the
-// Aspire Travel Concierge Agentforce agent through a public Apex REST endpoint and renders
-// the rich cards (profile, flight options, booking) produced by the agent's actions.
+// Aspire Travel Concierge through a public Apex REST endpoint and renders its rich cards.
 (function () {
   'use strict';
 
   var CONFIG = {
-    // The same endpoint on two Salesforce addresses (different certificates, so separate browser
-    // connections). Normally only the first is used.
-    endpoints: [
-      'https://orgfarm-e88355df2d-dev-ed.develop.my.salesforce-sites.com/aspireconcierge/services/apexrest/aspireConcierge/assist',
-      'https://orgfarm-e88355df2d-dev-ed.develop.my.site.com/ESWAspireConciergeChat1791041414849vforc/services/apexrest/aspireConcierge/assist'
-    ],
-    // If no reply arrives, send a copy on a fresh connection at these delays. Nothing is cancelled.
-    backupDelaysMs: [9000, 18000, 32000],
-    // While the chat is open, touch both connections regularly so an idle one is never silently dropped.
-    heartbeatMs: 20000,
+    endpoint: 'https://orgfarm-e88355df2d-dev-ed.develop.my.salesforce-sites.com/aspireconcierge/services/apexrest/aspireConcierge/assist',
+    attemptTimeoutMs: 25000,
+    attempts: 2,
     historyTurns: 12,
     agentName: 'Aspire Travel Concierge',
     launcherText: 'Ask Me Anything',
@@ -110,8 +102,7 @@
     els.send = root.querySelector('.acw-send');
     els.menu = root.querySelector('.acw-menu');
 
-    els.launcher.addEventListener('click', function () { warm(); setOpen(true); });
-    els.launcher.addEventListener('mouseenter', warm);
+    els.launcher.addEventListener('click', function () { setOpen(true); });
     root.querySelector('.acw-min').addEventListener('click', function () { setOpen(false); });
     root.querySelector('.acw-more').addEventListener('click', function (e) {
       e.stopPropagation();
@@ -120,7 +111,6 @@
     document.addEventListener('click', function () { els.menu.classList.remove('show'); });
     root.querySelector('.acw-end').addEventListener('click', endConversation);
 
-    els.input.addEventListener('focus', warm);
     els.input.addEventListener('input', function () {
       els.input.style.height = 'auto';
       els.input.style.height = Math.min(els.input.scrollHeight, 120) + 'px';
@@ -154,30 +144,6 @@
       if (e.target.closest('.acw-ex-skip')) send('No thanks');
     });
   }
-
-  var heartbeat = null;
-  function beat() {
-    CONFIG.endpoints.forEach(function (url) {
-      fetch(url, { method: 'GET', cache: 'no-store' }).catch(function () { /* ignore */ });
-    });
-  }
-  function setHeartbeat(on) {
-    clearInterval(heartbeat);
-    heartbeat = null;
-    if (on) {
-      beat();
-      heartbeat = setInterval(function () { if (!document.hidden) beat(); }, CONFIG.heartbeatMs);
-    }
-  }
-  var lastWarm = 0;
-  function warm() {
-    if (Date.now() - lastWarm < 5000) return;
-    lastWarm = Date.now();
-    beat();
-  }
-  document.addEventListener('visibilitychange', function () { if (!document.hidden) warm(); });
-  window.addEventListener('focus', warm);
-  window.addEventListener('online', warm);
 
   function setOpen(open) {
     state.open = open;
@@ -241,42 +207,35 @@
       state: state.trip || {}
     };
 
-    // A pooled browser connection to Salesforce can go silently dead while the page is idle; a
-    // message sent on it waits minutes for TCP to give up. So if no reply arrives quickly, send a
-    // copy to the second address, which always uses a fresh connection. Requests are never
-    // cancelled (the Salesforce edge can throttle clients that cancel); the first reply wins and
-    // late duplicates are ignored. Duplicates are harmless on the server (booking is idempotent).
-    new Promise(function (resolve, reject) {
-      var done = false, failed = 0, sent = 0, timers = [];
-      var total = CONFIG.backupDelaysMs.length + 1;
-      function send(url) {
-        sent++;
-        fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body: JSON.stringify(payload) })
-          .then(function (r) {
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            return r.json();
-          })
-          .then(function (json) {
-            if (done) return;
-            done = true;
-            timers.forEach(clearTimeout);
-            resolve(json);
-          })
-          .catch(function (err) {
-            if (done) return;
-            failed++;
-            console.warn('Concierge request failed (' + (err && (err.name + ': ' + err.message)) + ')');
-            if (failed >= total) { done = true; timers.forEach(clearTimeout); reject(err); }
-            else if (failed >= sent) send(CONFIG.endpoints[sent % CONFIG.endpoints.length]);
-          });
-      }
-      send(CONFIG.endpoints[0]);
-      CONFIG.backupDelaysMs.forEach(function (ms, i) {
-        timers.push(setTimeout(function () {
-          if (!done && sent < total) send(CONFIG.endpoints[(i + 1) % CONFIG.endpoints.length]);
-        }, ms));
-      });
-    })
+    var body = JSON.stringify(payload);
+    function attempt(n) {
+      var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+      var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, CONFIG.attemptTimeoutMs) : null;
+      return fetch(CONFIG.endpoint, {
+        method: 'POST',
+        mode: 'cors',
+        credentials: 'omit',
+        cache: 'no-store',
+        referrerPolicy: 'no-referrer',
+        headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+        body: body,
+        signal: ctrl ? ctrl.signal : undefined
+      })
+        .then(function (r) {
+          clearTimeout(timer);
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        }, function (err) {
+          clearTimeout(timer);
+          throw err;
+        })
+        .catch(function (err) {
+          console.warn('Concierge request attempt ' + n + ' failed (' + (err && (err.name + ': ' + err.message)) + ')');
+          if (n < CONFIG.attempts) return attempt(n + 1);
+          throw err;
+        });
+    }
+    attempt(1)
       .then(function (res) {
         if (res.state) state.trip = res.state;
         var now = Date.now();
@@ -534,10 +493,6 @@
   // ───────────── start ─────────────
   function init() {
     build();
-    // Open both connections as soon as the page has loaded and keep them warm, so the first
-    // message never waits on a slow new connection to Salesforce.
-    if (document.readyState === 'complete') setHeartbeat(true);
-    else window.addEventListener('load', function () { setHeartbeat(true); });
     try { sessionStorage.removeItem('aspireConciergeChat.v1'); sessionStorage.removeItem('aspireConciergeChat.v2'); } catch (e) { /* ignore */ }
   }
   if (document.readyState === 'loading') {
