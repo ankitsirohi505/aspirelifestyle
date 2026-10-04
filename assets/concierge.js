@@ -13,7 +13,7 @@
       'https://orgfarm-e88355df2d-dev-ed.develop.my.site.com/ESWAspireConciergeChat1791041414849vforc/services/apexrest/aspireConcierge/assist'
     ],
     // If no reply arrives, send a copy on a fresh connection at these delays. Nothing is cancelled.
-    backupDelaysMs: [6000, 15000, 30000],
+    backupDelaysMs: [9000, 18000, 32000],
     // While the chat is open, touch both connections regularly so an idle one is never silently dropped.
     heartbeatMs: 20000,
     historyTurns: 12,
@@ -110,7 +110,8 @@
     els.send = root.querySelector('.acw-send');
     els.menu = root.querySelector('.acw-menu');
 
-    els.launcher.addEventListener('click', function () { setOpen(true); });
+    els.launcher.addEventListener('click', function () { warm(); setOpen(true); });
+    els.launcher.addEventListener('mouseenter', warm);
     root.querySelector('.acw-min').addEventListener('click', function () { setOpen(false); });
     root.querySelector('.acw-more').addEventListener('click', function (e) {
       e.stopPropagation();
@@ -119,6 +120,7 @@
     document.addEventListener('click', function () { els.menu.classList.remove('show'); });
     root.querySelector('.acw-end').addEventListener('click', endConversation);
 
+    els.input.addEventListener('focus', warm);
     els.input.addEventListener('input', function () {
       els.input.style.height = 'auto';
       els.input.style.height = Math.min(els.input.scrollHeight, 120) + 'px';
@@ -167,6 +169,15 @@
       heartbeat = setInterval(function () { if (!document.hidden) beat(); }, CONFIG.heartbeatMs);
     }
   }
+  var lastWarm = 0;
+  function warm() {
+    if (Date.now() - lastWarm < 5000) return;
+    lastWarm = Date.now();
+    beat();
+  }
+  document.addEventListener('visibilitychange', function () { if (!document.hidden) warm(); });
+  window.addEventListener('focus', warm);
+  window.addEventListener('online', warm);
 
   function setOpen(open) {
     state.open = open;
@@ -240,7 +251,7 @@
       var total = CONFIG.backupDelaysMs.length + 1;
       function send(url) {
         sent++;
-        fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+        fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body: JSON.stringify(payload) })
           .then(function (r) {
             if (!r.ok) throw new Error('HTTP ' + r.status);
             return r.json();
