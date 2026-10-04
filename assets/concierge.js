@@ -445,7 +445,7 @@
     var h = '<div class="acw-card acw-fo"><div class="acw-card-head acw-ht-head">' +
       '<div class="acw-fo-route">' + esc(d.city) + ' stays</div>' +
       '<div class="acw-fo-meta">' + esc(d.stayDates) + ' · ' + esc(d.guests) + '</div>' +
-      '<div class="acw-fo-sub">' + (personal ? 'Picked for you' : 'Sorted by rating and location') + '</div></div>';
+      '<div class="acw-fo-sub">' + (d.sortedBy ? 'Hotels ' + esc(d.sortedBy) : (personal ? 'Picked for you' : 'Sorted by rating and location')) + '</div></div>';
     opts.forEach(function (o) {
       h += '<div class="acw-opt' + (o.recommended ? ' acw-opt-best' : '') + '">' +
         (o.recommended ? '<div class="acw-ribbon">&#9733; ' + (personal ? 'Best match for you' : 'Top pick') + '</div>' : '') +
@@ -482,21 +482,24 @@
 
   function extrasCard(d, interactive) {
     var opts = d.options || [];
+    // Points are offered only when the customer has enough for at least one service.
+    var balance = d.pointsBalance || 0;
+    var canRedeem = opts.some(function (o) { return o.pointsPrice <= balance; });
     var h = '<div class="acw-card acw-fo acw-ex"><div class="acw-card-head acw-ex-head">' +
       '<div class="acw-fo-route">Make the most of ' + esc(d.city) + '</div>' +
       '<div class="acw-fo-meta">Aspire Lifestyles services for your stay at ' + esc(d.hotelName) + '</div>' +
-      '<div class="acw-fo-sub">Your balance: ' + num(d.pointsBalance) + ' points</div></div>';
+      (canRedeem ? '<div class="acw-fo-sub">Your balance: ' + num(balance) + ' points</div>' : '<div class="acw-fo-sub">Earn Aspire points on every service</div>') + '</div>';
     opts.forEach(function (o) {
       h += '<div class="acw-opt acw-ex-opt"><div class="acw-opt-top"><div class="acw-rank">' + esc(o.rank) + '</div>' +
         '<div class="acw-airline"><b>' + esc(o.name) + '</b><span>' + esc(o.category) + (o.serviceDate ? ' · ' + esc(o.serviceDate) : '') +
         (o.familyFriendly ? ' · Family friendly' : '') + '</span></div>' +
-        '<div class="acw-price"><b>' + money(o.price) + '</b><span>or ' + num(o.pointsPrice) + ' pts</span></div></div>' +
+        '<div class="acw-price"><b>' + money(o.price) + '</b>' + (o.pointsPrice <= balance ? '<span>or ' + num(o.pointsPrice) + ' pts</span>' : '') + '</div></div>' +
         '<div class="acw-reason">' + esc(o.description) + '</div>' +
         (interactive ? '<button type="button" class="acw-ex-pick" data-rank="' + esc(o.rank) + '">Add</button>' : '') + '</div>';
     });
     if (interactive) {
       h += '<div class="acw-ex-actions"><button type="button" class="acw-ex-book" disabled>Book selected</button>' +
-        '<button type="button" class="acw-ex-book acw-ex-alt" data-points="1" disabled>Use my points</button>' +
+        (canRedeem ? '<button type="button" class="acw-ex-book acw-ex-alt" data-points="1" disabled>Use my points</button>' : '') +
         '<button type="button" class="acw-ex-skip">No thanks</button></div>';
     }
     h += '<div class="acw-fo-foot">' + (interactive ? 'Add what you like, or just tell me' : 'Services presented') + '</div></div>';
