@@ -150,7 +150,6 @@
   }
 
   function setOpen(open) {
-    setHeartbeat(open);
     state.open = open;
     els.root.classList.toggle('acw-open', open);
     if (open && !state.started) {
@@ -407,6 +406,10 @@
   // ───────────── start ─────────────
   function init() {
     build();
+    // Open both connections as soon as the page has loaded and keep them warm, so the first
+    // message never waits on a slow new connection to Salesforce.
+    if (document.readyState === 'complete') setHeartbeat(true);
+    else window.addEventListener('load', function () { setHeartbeat(true); });
     try { sessionStorage.removeItem('aspireConciergeChat.v1'); sessionStorage.removeItem('aspireConciergeChat.v2'); } catch (e) { /* ignore */ }
   }
   if (document.readyState === 'loading') {
