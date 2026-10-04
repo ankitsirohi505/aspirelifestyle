@@ -19,6 +19,7 @@
   var ICONS = {
     chat: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5c4.97 0 9 3.36 9 7.5s-4.03 7.5-9 7.5c-1.05 0-2.06-.15-3-.43L4.5 20l1.08-3.6C4.03 15.06 3 13.12 3 11c0-4.14 4.03-7.5 9-7.5z"/></svg>',
     more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="12" cy="19" r="1.9"/></svg>',
+    minimize: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 12h12"/></svg>',
     chevron: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 9l7 7 7-7"/></svg>',
     agent: '<svg viewBox="0 0 30 30" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="10" r="5"/><path d="M3.5 25c.8-4.6 4.3-7.5 8.5-7.5 1.7 0 3.2.4 4.5 1.2"/><path d="M23 18v8M19 22h8"/></svg>',
     plus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
@@ -43,7 +44,7 @@
   var els = {};
 
   function freshState() {
-    return { open: false, started: false, items: [], trip: {} };
+    return { open: false, started: false, items: [], trip: {}, unread: 0 };
   }
   function save() { /* intentionally not persisted */ }
 
@@ -74,15 +75,15 @@
     var root = document.createElement('div');
     root.className = 'acw';
     root.innerHTML =
-      '<button class="acw-launcher" type="button" aria-label="Open chat">' + ICONS.chat + '<span>' + esc(CONFIG.launcherText) + '</span></button>' +
+      '<button class="acw-launcher" type="button" aria-label="Open chat">' + ICONS.chat + '<span class="acw-launch-text">' + esc(CONFIG.launcherText) + '</span><span class="acw-badge" aria-hidden="true"></span></button>' +
       '<div class="acw-window" role="dialog" aria-label="' + esc(CONFIG.agentName) + ' chat">' +
         '<div class="acw-header">' +
           ICONS.chat.replace('<svg', '<svg class="acw-logo"') +
           '<div class="acw-title">' + esc(CONFIG.agentName) + '</div>' +
           '<button class="acw-icon-btn acw-more" type="button" aria-label="More options">' + ICONS.more + '</button>' +
-          '<button class="acw-icon-btn acw-min" type="button" aria-label="Minimise chat">' + ICONS.chevron + '</button>' +
+          '<button class="acw-icon-btn acw-min" type="button" aria-label="Minimise chat" title="Minimise">' + ICONS.minimize + '</button>' +
         '</div>' +
-        '<div class="acw-menu" role="menu"><button type="button" class="acw-end" role="menuitem">End conversation</button></div>' +
+        '<div class="acw-menu" role="menu"><button type="button" class="acw-end" role="menuitem">End conversation</button><button type="button" class="acw-min-item" role="menuitem">Minimise</button></div>' +
         '<div class="acw-body" aria-live="polite"></div>' +
         '<div class="acw-composer">' +
           '<div class="acw-input-wrap">' +
@@ -110,6 +111,7 @@
     });
     document.addEventListener('click', function () { els.menu.classList.remove('show'); });
     root.querySelector('.acw-end').addEventListener('click', endConversation);
+    root.querySelector('.acw-min-item').addEventListener('click', function () { els.menu.classList.remove('show'); setOpen(false); });
 
     els.input.addEventListener('input', function () {
       els.input.style.height = 'auto';
@@ -145,8 +147,21 @@
     });
   }
 
+  function updateLauncher() {
+    var active = state.started && !state.open;
+    var text = !active ? CONFIG.launcherText
+      : (busy ? CONFIG.agentName + ' · Typing…' : (state.unread ? CONFIG.agentName + ' · New message' : CONFIG.agentName + ' · Chat in progress'));
+    els.launcher.classList.toggle('acw-active', active);
+    els.launcher.querySelector('.acw-launch-text').textContent = text;
+    var badge = els.launcher.querySelector('.acw-badge');
+    badge.textContent = state.unread ? String(state.unread) : '';
+    badge.classList.toggle('show', active && state.unread > 0);
+    els.launcher.setAttribute('aria-label', active ? 'Restore chat with ' + CONFIG.agentName : 'Open chat');
+  }
+
   function setOpen(open) {
     state.open = open;
+    if (open) state.unread = 0;
     els.root.classList.toggle('acw-open', open);
     if (open && !state.started) {
       state.started = true;
@@ -158,10 +173,15 @@
       render();
       setTimeout(function () { els.input.focus(); }, 50);
     }
+    updateLauncher();
   }
 
   function endConversation() {
     els.menu.classList.remove('show');
+    busy = false;
+    slow = 0;
+    clearTimeout(slowTimer);
+    clearTimeout(verySlowTimer);
     state = freshState();
     state.open = true;
     save();
@@ -208,6 +228,8 @@
     };
 
     var body = JSON.stringify(payload);
+    var sentFor = state;
+    updateLauncher();
     function attempt(n) {
       var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
       var timer = ctrl ? setTimeout(function () { ctrl.abort(); }, CONFIG.attemptTimeoutMs) : null;
@@ -241,6 +263,8 @@
         var now = Date.now();
         var cards = (res.cards || []).filter(function (c) { return SHOWN_CARDS.indexOf(c.type) !== -1; });
         var texts = (res.replies || []).filter(function (t) { return t && String(t).trim(); });
+        if (sentFor !== state) return;
+        if (!state.open) state.unread += 1;
         if (texts.length || cards.length) {
           state.items.push({ kind: 'agent', texts: texts, cards: cards, ts: now });
         } else {
@@ -250,15 +274,19 @@
       })
       .catch(function (err) {
         console.error('Concierge request failed:', err);
+        if (sentFor !== state) return;
+        if (!state.open) state.unread += 1;
         state.items.push({ kind: 'error', texts: ['I could not reach the concierge just now. Please check your connection and try again.'], ts: Date.now() });
       })
       .then(function () {
+        if (sentFor !== state) return;
         clearTimeout(slowTimer);
         clearTimeout(verySlowTimer);
         slow = 0;
         busy = false;
         save();
         render();
+        updateLauncher();
       });
   }
 

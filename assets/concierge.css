@@ -248,3 +248,11 @@
 .acw-sum-head { background: linear-gradient(135deg, #032d60, #0b5cab); }
 .acw-sum-sec { margin-bottom: 10px; font-size: 12.5px; }
 .acw-sum-sec small { display: block; font-size: 9.5px; letter-spacing: .12em; text-transform: uppercase; color: #9a9a9a; margin-bottom: 2px; }
+
+/* Minimised conversation */
+.acw-launcher { position: fixed; }
+.acw-launcher .acw-badge { display: none; }
+.acw-launcher.acw-active { padding: 14px 22px 14px 20px; font-size: 15px; background: #ffffff; color: #1f1f1f; border: 1px solid #dddbda; }
+.acw-launcher.acw-active svg { color: #1f1f1f; }
+.acw-launcher.acw-active::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: #2e844a; box-shadow: 0 0 0 3px rgba(46, 132, 74, .18); flex-shrink: 0; }
+.acw-launcher .acw-badge.show { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #ba0517; color: #fff; font-size: 12px; font-weight: 700; }
