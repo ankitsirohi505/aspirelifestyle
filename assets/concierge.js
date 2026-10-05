@@ -28,7 +28,7 @@
   };
 
   // Card types the widget shows; others (such as the customer profile) are used by the agent only.
-  var SHOWN_CARDS = ['packages', 'review', 'notice', 'flightOptions', 'booking', 'hotelOptions', 'hotelBooking', 'extras', 'tripSummary'];
+  var SHOWN_CARDS = ['ideas', 'packages', 'review', 'notice', 'flightOptions', 'booking', 'hotelOptions', 'hotelBooking', 'extras', 'tripSummary'];
 
   var AIRLINE_COLOURS = {
     'Emirates': '#c8102e', 'British Airways': '#075aaa', 'Virgin Atlantic': '#8f0d3c',
@@ -124,6 +124,8 @@
     els.send.addEventListener('click', submit);
     els.body.addEventListener('click', function (e) {
       if (busy) return;
+      var idea = e.target.closest('.acw-idea-pick');
+      if (idea) { send('Let\'s plan ' + idea.getAttribute('data-title')); return; }
       var pkg = e.target.closest('.acw-pkg-pick');
       if (pkg) { send('I\'ll take package ' + pkg.getAttribute('data-pkg')); return; }
       if (e.target.closest('.acw-rv-book')) { send('Book everything'); return; }
@@ -301,9 +303,10 @@
       html += '<div class="acw-system">' + esc(CONFIG.agentName) + ' joined<br>' + esc(timeLabel(state.joinedAt || Date.now())) + '</div>';
     }
     // Only the newest list of each kind is clickable, and only until the customer has moved past it.
-    var lastFlightIdx = -1, bookedAfter = false, lastHotelIdx = -1, lastExtrasIdx = -1, lastPackagesIdx = -1, lastReviewIdx = -1;
+    var lastFlightIdx = -1, bookedAfter = false, lastHotelIdx = -1, lastExtrasIdx = -1, lastPackagesIdx = -1, lastReviewIdx = -1, lastIdeasIdx = -1;
     state.items.forEach(function (it, i) {
       (it.cards || []).forEach(function (c) {
+        if (c.type === 'ideas') lastIdeasIdx = i;
         if (c.type === 'packages') { lastPackagesIdx = i; lastReviewIdx = -1; }
         if (c.type === 'review') lastReviewIdx = i;
         if (c.type === 'flightOptions') { lastFlightIdx = i; bookedAfter = false; lastHotelIdx = -1; lastExtrasIdx = -1; }
@@ -319,6 +322,7 @@
     if (stage !== 'EXTRAS') lastExtrasIdx = -1;
     if (stage !== 'PACKAGES' && stage !== 'REVIEW') lastPackagesIdx = -1;
     if (stage !== 'REVIEW') lastReviewIdx = -1;
+    if (!(state.trip && state.trip.ideas && state.trip.ideas.length)) lastIdeasIdx = -1;
 
     state.items.forEach(function (it, i) {
       if (it.kind === 'user') {
@@ -331,7 +335,7 @@
         '<div class="acw-avatar">' + ICONS.agent + '</div><div class="acw-col">';
       (it.texts || []).forEach(function (t) { html += '<div class="acw-bubble">' + richText(t) + '</div>'; });
       cards.forEach(function (c) {
-        var interactive = (c.type === 'packages' && i === lastPackagesIdx) || (c.type === 'review' && i === lastReviewIdx) ||
+        var interactive = (c.type === 'ideas' && i === lastIdeasIdx) || (c.type === 'packages' && i === lastPackagesIdx) || (c.type === 'review' && i === lastReviewIdx) ||
           (c.type === 'flightOptions' && i === lastFlightIdx && !bookedAfter) ||
           (c.type === 'hotelOptions' && i === lastHotelIdx) || (c.type === 'extras' && i === lastExtrasIdx);
         html += '<div class="acw-card-inline">' + renderCard(c, interactive) + '</div>';
@@ -359,6 +363,7 @@
   function renderCard(card, interactive) {
     var d = card.data || {};
     if (card.type === 'profile') return profileCard(d);
+    if (card.type === 'ideas') return ideasCard(d, interactive);
     if (card.type === 'packages') return packagesCard(d, interactive);
     if (card.type === 'review') return reviewCard(d, interactive);
     if (card.type === 'notice') return noticeCard(d);
@@ -536,6 +541,26 @@
       return '<div class="acw-pk-line"><span class="acw-pk-ico">&#10022;</span><div><b>' + esc(s.name) + '</b><span>' +
         (s.withPoints ? num(s.pointsPrice) + ' Aspire points' : money(s.price)) + '</span></div></div>';
     }).join('');
+  }
+
+  function ideasCard(d, interactive) {
+    var personal = d.personalised !== false && (d.ideas || []).some(function (x) { return x.tag !== 'Popular this season'; });
+    var h = '<div class="acw-card acw-fo acw-ideas"><div class="acw-card-head">' +
+      '<div class="acw-fo-route">' + (personal ? 'Picked for you' + (d.firstName ? ', ' + esc(d.firstName) : '') : 'Popular this season') + '</div>' +
+      '<div class="acw-fo-sub">' + (personal ? 'Trip ideas from your travels' : 'Loved by Aspire members') + '</div></div>';
+    (d.ideas || []).forEach(function (x, n) {
+      var top = personal && n === 0;
+      h += '<div class="acw-opt' + (top ? ' acw-opt-best' : '') + '">' +
+        (top ? '<div class="acw-ribbon">&#9733; Top pick for you</div>' : '') +
+        '<span class="acw-idea-tag">' + esc(x.tag) + '</span>' +
+        '<div class="acw-idea-title">' + esc(x.title) + '</div>' +
+        '<div class="acw-idea-dates">' + esc(x.dates) + '</div>' +
+        '<div class="acw-reason">' + esc(x.reason) + '</div>' +
+        (interactive ? '<button type="button" class="acw-select acw-idea-pick" data-title="' + esc(x.title) + '">Plan this trip</button>' : '') +
+        '</div>';
+    });
+    h += '<div class="acw-fo-foot">' + (interactive ? 'Choose a trip, or tell me where you would like to go' : 'Trip ideas presented') + '</div></div>';
+    return h;
   }
 
   function packagesCard(d, interactive) {
