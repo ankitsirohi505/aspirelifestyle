@@ -156,7 +156,7 @@
   function updateLauncher() {
     var active = state.started && !state.open;
     var text = !active ? CONFIG.launcherText
-      : (busy ? CONFIG.agentName + ' · Typing…' : (state.unread ? CONFIG.agentName + ' · New message' : CONFIG.agentName + ' · Chat in progress'));
+      : (busy ? CONFIG.agentName + ' · Typing…' : (state.unread ? CONFIG.agentName + ' · New message' : CONFIG.agentName));
     els.launcher.classList.toggle('acw-active', active);
     els.launcher.querySelector('.acw-launch-text').textContent = text;
     var badge = els.launcher.querySelector('.acw-badge');
